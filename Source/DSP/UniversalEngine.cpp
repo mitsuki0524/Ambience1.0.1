@@ -5,9 +5,21 @@ namespace FDNReverb {
         fbVec.fill(0.0f);
         // 各LFOのシードをばらけさせて非相関化（Decorrelation）する
         for (int i = 0; i < FDN_ORDER; ++i) lfos[i].state = 12345 + i * 9876;
+
+#if AMBIENCE_USE_STAGE2_ABSORPTION
+        absorptionMidGain.fill(1.0f);
+#endif
     }
+
     void UniversalEngine::prepare(double sampleRate, int /*maxBlockSize*/) {
         fs = sampleRate;
+
+#if AMBIENCE_USE_STAGE2_ABSORPTION
+        // Stage 2 用: Interaction Matrix を起動時にプリ計算
+        // (サンプルレート依存のためここで実施)
+        MagnitudeResponseFitter::precomputeInteractionMatrix(sampleRate);
+#endif
+
         // 2のべき乗を計算するラムダ式
         auto getPow2 = [](size_t s) -> size_t {
             size_t p = 1;
@@ -41,11 +53,21 @@ namespace FDNReverb {
         }
         reset();
     }
+
     void UniversalEngine::reset() {
         memoryPool.clear();
         fbVec.fill(0.0f);
+
+#if AMBIENCE_USE_STAGE2_ABSORPTION
+        // 12段 × 16ライン すべての Biquad 状態をリセット
+        for (auto& lineFilters : absorptionFiltersS2) {
+            for (auto& f : lineFilters) f.reset();
+        }
+#else
         for (auto& f : absorptionFilters) f.reset();
+#endif
     }
+
     void UniversalEngine::setParams(const DSPParams& p) {
         activeParams = p;
         // 選択されたアルゴリズム(0~6)をTopologyにマッピング
@@ -58,6 +80,7 @@ namespace FDNReverb {
         }
         updateTopologyAndRouting();
     }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // 素数べき乗 (Prime Power) アルゴリズムによる遅延時間の算定
     // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +98,7 @@ namespace FDNReverb {
             fdnBaseDelaySamples[i] = std::pow(static_cast<float>(primes[i]), m_i);
         }
     }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // 動的トポロジー構成（アルゴリズムごとの結線切り替え）
     // ─────────────────────────────────────────────────────────────────────────────
@@ -85,20 +109,39 @@ namespace FDNReverb {
         for (auto& v : scaledRT60) v *= activeParams.decayScale;
         effectiveRT60 = scaledRT60;
 
-        // ─── 各遅延線の吸収フィルタを設計 ───
-        // designAbsorption() は内部で MagnitudeResponseFitter (Stage 1: Jot 直交化1次)
-        // を呼び出し、3 段の Biquad 係数を返す:
-        //   [0] = Jot 直交化フィルタ (10バンド RT60 から DC/Nyquist の2点でフィット)
-        //   [1] = Low Shelf  (ユーザー LF Absorption 補正)
-        //   [2] = High Shelf (ユーザー HF Damping 補正)
-        // 現在の UniversalEngine は各遅延線につき1段のみ使用しているため、
-        // [0] のみを採用する (Stage 2 で全段カスケードに拡張予定)。
+#if AMBIENCE_USE_STAGE2_ABSORPTION
+        // ─── Stage 2: Välimäki–Liski 累積バイカッドGEQ (12段カスケード) ───
+        //
+        // 各遅延線につき:
+        //   currentAbsorptionCoeffsS2[i][0]    = プリシェルフ (Two-Stage の第1段)
+        //   currentAbsorptionCoeffsS2[i][1..10] = GEQ 10 段 (WLS フィット結果)
+        //   currentAbsorptionCoeffsS2[i][11]   = LF ユーザー補正シェルフ
+        //   absorptionMidGain[i]               = 中域基準 DC ゲイン
+        //
+        // 注: HF Damping ユーザー操作は GEQ の高域帯への影響として表現するため
+        //     独立した HF Shelf 段は持たない (Stage 1 との設計差異)
+        for (int i = 0; i < FDN_ORDER; ++i) {
+            auto s2 = MagnitudeResponseFitter::designStage2(
+                static_cast<int>(fdnBaseDelaySamples[i]), fs, scaledRT60,
+                activeParams.hfDamping, activeParams.lfAbsorption);
+
+            absorptionMidGain[i] = s2.midGain;
+            currentAbsorptionCoeffsS2[i][0] = s2.preFilter;
+            for (int b = 0; b < NUM_BANDS; ++b) {
+                currentAbsorptionCoeffsS2[i][1 + b] = s2.geqStages[b];
+            }
+            currentAbsorptionCoeffsS2[i][11] = s2.lfUserShelf;
+        }
+#else
+        // ─── Stage 1: Jot 直交化1次 (1段のみ使用) ───
         for (int i = 0; i < FDN_ORDER; ++i) {
             auto absoStages = FilterDesign::designAbsorption(
                 static_cast<int>(fdnBaseDelaySamples[i]), fs, scaledRT60,
                 activeParams.hfDamping, activeParams.lfAbsorption);
             currentAbsorptionCoeffs[i] = absoStages[0];
         }
+#endif
+
         // ─── 動的 Auto Gain Compensation (AGC) の計算 ───
         // 1. 基準となるRT60（500Hz帯域）を取得
         float rt60Mid = std::max(0.1f, scaledRT60[4]);
@@ -140,6 +183,7 @@ namespace FDNReverb {
         float totalLateMakeupDB = 24.0f + decayCompDB + topologyOffsetDB;
         lateMakeupGainLinear = juce::Decibels::decibelsToGain(totalLateMakeupDB);
     }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // FWHT (O(N log N) の無損失マトリクス) & Sign Flipping
     // ─────────────────────────────────────────────────────────────────────────────
@@ -165,6 +209,7 @@ namespace FDNReverb {
         };
         for (int i = 0; i < 16; ++i) v[i] *= flip[i];
     }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // メインDSP処理ループ
     // ─────────────────────────────────────────────────────────────────────────────
@@ -208,8 +253,23 @@ namespace FDNReverb {
                 float delaySmp = fdnBaseDelaySamples[i] + lfoVal * depthSamples;
                 // FDNリード
                 float d = fdnDelays[i].read(delaySmp);
-                // 吸収フィルタ (Biquad)
+
+#if AMBIENCE_USE_STAGE2_ABSORPTION
+                // ─── Stage 2: 12段カスケード吸収フィルタ ───
+                // 中域基準ゲインを最初に適用 (DC スカラー)
+                d *= absorptionMidGain[i];
+                // 12段の Biquad を順次通過
+                //   段 0       : プリシェルフ
+                //   段 1〜10   : GEQ 10 段
+                //   段 11      : LF ユーザー補正シェルフ
+                for (int s = 0; s < ABSO_STAGES_S2; ++s) {
+                    d = absorptionFiltersS2[i][s].tick(d, currentAbsorptionCoeffsS2[i][s]);
+                }
+#else
+                // ─── Stage 1: 1段の Jot 直交化1次フィルタ ───
                 d = absorptionFilters[i].tick(d, currentAbsorptionCoeffs[i]);
+#endif
+
                 // Nested Allpass Filter
                 // FDNループ内にAllpassをネストすることで指数関数的なSmearingを生成
                 float apfDelaySmp = (1.5f + i * 0.3f) * 0.001f * fs;
