@@ -39,6 +39,9 @@ namespace FDNReverb {
             ptr = memoryPool.requestMemory(static_cast<size_t>(fs * 0.1), mask);
             nestedAllpassDelays[i].init(ptr, mask);
         }
+        // ─── 追加: AcousticMetrics 初期化 ───
+        acousticMetrics.prepare(sampleRate, 2000.0f);  // 2秒解析窓
+
         reset();
     }
 
@@ -53,6 +56,9 @@ namespace FDNReverb {
 #else
         for (auto& f : absorptionFilters) f.reset();
 #endif
+
+        // ─── 追加: AcousticMetrics リセット ───
+        acousticMetrics.reset();
     }
 
     void UniversalEngine::setParams(const DSPParams& p) {
@@ -279,6 +285,10 @@ namespace FDNReverb {
             float erMix = bypassER ? 0.0f : erOut * activeParams.erLevel;
             float lateMixL = fdnOutL * lateMakeupGainLinear * activeParams.lateLevel;
             float lateMixR = fdnOutR * lateMakeupGainLinear * activeParams.lateLevel;
+            // ─── 追加: AcousticMetrics に Wet 信号を入力 ───
+// L+R モノミックスでメトリクス計算
+            float wetMono = (lateMixL + lateMixR) * 0.5f;
+            acousticMetrics.processSample(wetMono);
             outL[n] = (erMix + lateMixL) * wetGain;
             outR[n] = (erMix + lateMixR) * wetGain;
         }

@@ -35,6 +35,11 @@ public:
     float getInputRMSR()  const noexcept { return inputRMS_R.load(); }
     float getOutputRMSL() const noexcept { return outputRMS_L.load(); }
     float getOutputRMSR() const noexcept { return outputRMS_R.load(); }
+    // ─── 追加: AcousticMetrics の値を GUI に提供 ───
+    float getD50() const noexcept { return engine.getD50(); }
+    float getC50() const noexcept { return engine.getC50(); }
+    float getC80() const noexcept { return engine.getC80(); }
+    float getEDT() const noexcept { return engine.getEDT(); }
 
 private:
     void updateEngineParams();

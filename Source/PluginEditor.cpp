@@ -22,7 +22,6 @@ FDNReverbEditor::FDNReverbEditor(FDNReverbAudioProcessor& p)
     titleLabel.setFont(juce::Font(juce::FontOptions("Helvetica Neue", 14.f, juce::Font::bold)));
     titleLabel.setColour(juce::Label::textColourId, AmbienceColors::TextPrimary);
     addAndMakeVisible(titleLabel);
-
     addAndMakeVisible(algoSelector);
 
     // Build Knobs
@@ -42,7 +41,43 @@ FDNReverbEditor::FDNReverbEditor(FDNReverbAudioProcessor& p)
 
     rt60Viz.setProcessor(&p);
     addAndMakeVisible(rt60Viz);
+
     addAndMakeVisible(vuIn); addAndMakeVisible(vuOut);
+
+    // ─── 追加: AcousticMetrics ラベル群の初期化 ───
+    // セクションタイトル（rt60Viz の右上に配置するオーバーレイ）
+    labelMetricsTitle.setText("ACOUSTICS", juce::dontSendNotification);
+    labelMetricsTitle.setFont(juce::Font(juce::FontOptions("Helvetica Neue", 8.5f, juce::Font::bold)));
+    labelMetricsTitle.setColour(juce::Label::textColourId, AmbienceColors::Accent.withAlpha(0.75f));
+    labelMetricsTitle.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(labelMetricsTitle);
+
+    // キャプション (D50, C50, C80, EDT) と数値ラベルのセットアップヘルパー
+    auto setupCaption = [this](juce::Label& label, const juce::String& text) {
+        label.setText(text, juce::dontSendNotification);
+        label.setFont(juce::Font(juce::FontOptions("Helvetica Neue", 8.0f, juce::Font::plain)));
+        label.setColour(juce::Label::textColourId, AmbienceColors::TextSecondary.withAlpha(0.85f));
+        label.setJustificationType(juce::Justification::centredRight);
+        addAndMakeVisible(label);
+        };
+
+    auto setupValue = [this](juce::Label& label) {
+        label.setText("--", juce::dontSendNotification);
+        label.setFont(juce::Font(juce::FontOptions("Helvetica Neue", 9.5f, juce::Font::bold)));
+        label.setColour(juce::Label::textColourId, AmbienceColors::TextPrimary);
+        label.setJustificationType(juce::Justification::centredLeft);
+        addAndMakeVisible(label);
+        };
+
+    setupCaption(labelD50Caption, "D50:");
+    setupCaption(labelC50Caption, "C50:");
+    setupCaption(labelC80Caption, "C80:");
+    setupCaption(labelEDTCaption, "EDT:");
+
+    setupValue(labelD50Value);
+    setupValue(labelC50Value);
+    setupValue(labelC80Value);
+    setupValue(labelEDTValue);
 
     startTimerHz(60);
 }
@@ -53,6 +88,26 @@ void FDNReverbEditor::timerCallback() {
     vuIn.setLevels(audioProcessor.getInputRMSL(), audioProcessor.getInputRMSR());
     vuOut.setLevels(audioProcessor.getOutputRMSL(), audioProcessor.getOutputRMSR());
     vuIn.repaint(); vuOut.repaint();
+
+    // ─── 追加: AcousticMetrics の数値更新（30Hz に間引き） ───
+    static int metricsCounter = 0;
+    if (++metricsCounter >= 2) {  // 60Hz / 2 = 30Hz
+        metricsCounter = 0;
+
+        float d50 = audioProcessor.getD50();
+        float c50 = audioProcessor.getC50();
+        float c80 = audioProcessor.getC80();
+        float edt = audioProcessor.getEDT();
+
+        labelD50Value.setText(juce::String(d50 * 100.0f, 1) + "%",
+            juce::dontSendNotification);
+        labelC50Value.setText(juce::String(c50, 1) + "dB",
+            juce::dontSendNotification);
+        labelC80Value.setText(juce::String(c80, 1) + "dB",
+            juce::dontSendNotification);
+        labelEDTValue.setText(juce::String(edt, 2) + "s",
+            juce::dontSendNotification);
+    }
 }
 
 void FDNReverbEditor::resized()
@@ -61,6 +116,7 @@ void FDNReverbEditor::resized()
     oversamplingCombo.setBounds(W - 76, Y_HEADER + 4, 68, 18);
     vuIn.setBounds(W - 220, Y_HEADER + 2, 96, 28);
     vuOut.setBounds(W - 120, Y_HEADER + 2, 96, 28);
+
     algoSelector.setBounds(PAD, Y_ALGO, W - PAD * 2, 30);
 
     auto place = [&](ArcKnob& k, int& x, int y) {
@@ -81,6 +137,42 @@ void FDNReverbEditor::resized()
     place(kDuckAmt, kx, Y_ROW2); place(kDuckThr, kx, Y_ROW2); place(kDuckAtt, kx, Y_ROW2); place(kDuckRel, kx, Y_ROW2);
 
     rt60Viz.setBounds(PAD, Y_VIZ, W - PAD * 2, H - Y_VIZ - PAD);
+
+    // ─── 追加: AcousticMetrics ラベル配置 ───
+    // rt60Viz の右上隅に重ねる
+    // rt60Viz の右端から 280px 幅の領域を確保
+    const int metricsRight = W - PAD - 8;
+    const int metricsW = 280;
+    const int metricsLeft = metricsRight - metricsW;
+    const int metricsTop = Y_VIZ + 6;
+
+    // セクションタイトル
+    labelMetricsTitle.setBounds(metricsLeft, metricsTop, 80, 12);
+
+    // 4つの指標を 2x2 グリッドで配置
+    // 上段: D50, C50
+    // 下段: C80, EDT
+    const int metricsRowH = 14;
+    const int metricsRow1Y = metricsTop + 14;
+    const int metricsRow2Y = metricsRow1Y + metricsRowH;
+    const int captionW = 28;
+    const int valueW = 52;
+    const int colSpacing = 8;
+    const int colW = captionW + valueW;  // 80px
+
+    // 上段
+    labelD50Caption.setBounds(metricsLeft, metricsRow1Y, captionW, metricsRowH);
+    labelD50Value.setBounds(metricsLeft + captionW, metricsRow1Y, valueW, metricsRowH);
+
+    labelC50Caption.setBounds(metricsLeft + colW + colSpacing, metricsRow1Y, captionW, metricsRowH);
+    labelC50Value.setBounds(metricsLeft + colW + colSpacing + captionW, metricsRow1Y, valueW, metricsRowH);
+
+    // 下段
+    labelC80Caption.setBounds(metricsLeft, metricsRow2Y, captionW, metricsRowH);
+    labelC80Value.setBounds(metricsLeft + captionW, metricsRow2Y, valueW, metricsRowH);
+
+    labelEDTCaption.setBounds(metricsLeft + colW + colSpacing, metricsRow2Y, captionW, metricsRowH);
+    labelEDTValue.setBounds(metricsLeft + colW + colSpacing + captionW, metricsRow2Y, valueW, metricsRowH);
 }
 
 void FDNReverbEditor::paint(juce::Graphics& g)
@@ -97,7 +189,7 @@ void FDNReverbEditor::paint(juce::Graphics& g)
         PAD + 190, Y_HEADER + 10, W / 2, 12, juce::Justification::centredLeft);
 
     // ── Row 1 のセクション縦区切り線 ──
-    static const int gw[] = { 3, 2, 3, 2, 2 };  // グループごとのノブの数
+    static const int gw[] = { 3, 2, 3, 2, 2 };
     int lx = PAD;
     g.setColour(AmbienceColors::Separator);
     for (int gi = 0; gi < 4; ++gi) {

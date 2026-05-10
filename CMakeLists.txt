@@ -52,7 +52,7 @@ target_sources(Ambience PRIVATE
     Source/DSP/MagnitudeResponseFitter.cpp
     Source/DSP/UniversalEngine.h
     Source/DSP/UniversalEngine.cpp
-)
+ "Source/DSP/AcousticMetrics.h" "Source/DSP/AcousticMetrics.cpp")
 # ============================================================================
 # インクルードパス
 # ============================================================================
