@@ -191,6 +191,28 @@ namespace FDNReverb {
             break;
         }
 
+        // ─────────────────────────────────────────────────────────────────────────
+    // EDT (Early Decay Time) の理論計算
+    // ─────────────────────────────────────────────────────────────────────────
+    // EDT = 中域RT60 × トポロジー別係数
+    // 経験則：
+    //   Room (小型空間)     ≈ 0.7  × RT60 (初期反射が早く減衰)
+    //   Hall (大型空間)     ≈ 0.95 × RT60 (緩やかな減衰)
+    //   Plate (金属板)      ≈ 0.6  × RT60 (高密度初期反射)
+    //   Spring (バネ)       ≈ 0.5  × RT60 (急激な初期減衰)
+    //   Goldfoil (金属箔)   ≈ 0.85 × RT60 (中庸)
+    // ─────────────────────────────────────────────────────────────────────────
+        float edtCoeff = 0.7f;
+        switch (currentTopology) {
+        case ReverbTopology::Room:     edtCoeff = 0.70f; break;
+        case ReverbTopology::Hall:     edtCoeff = 0.95f; break;
+        case ReverbTopology::Plate:    edtCoeff = 0.60f; break;
+        case ReverbTopology::Spring:   edtCoeff = 0.50f; break;
+        case ReverbTopology::Goldfoil: edtCoeff = 0.85f; break;
+        }
+        theoreticalEDT = rt60Mid * edtCoeff;
+
+
         float totalLateMakeupDB = baseDB + decayCompDB + algoOffset;
         lateMakeupGainLinear = juce::Decibels::decibelsToGain(totalLateMakeupDB);
     }

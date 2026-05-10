@@ -50,7 +50,7 @@ namespace FDNReverb {
         float getD50() const noexcept { return acousticMetrics.getD50(); }
         float getC50() const noexcept { return acousticMetrics.getC50(); }
         float getC80() const noexcept { return acousticMetrics.getC80(); }
-        float getEDT() const noexcept { return acousticMetrics.getEDT(); }
+        float getEDT() const noexcept { return theoreticalEDT; }
 
     private:
         void updateTopologyAndRouting();
@@ -88,6 +88,8 @@ namespace FDNReverb {
         float lateMixScale{ 1.0f };
         float lateMakeupGainLinear{ 1.0f };
         std::array<float, NUM_BANDS> effectiveRT60;
+        // 既存の effectiveRT60 の近くに追加
+        float theoreticalEDT{ 0.0f };  // EDT理論値 (秒)
 
         // ─── 追加: AcousticMetrics インスタンス ───
         AcousticMetrics acousticMetrics;
