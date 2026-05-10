@@ -4,7 +4,6 @@
 #include <array>
 
 namespace FDNReverb {
-
     // ─────────────────────────────────────────────────────────────────────────────
     //  Biquad helpers (Direct Form II Transposed — most robust)
     // ─────────────────────────────────────────────────────────────────────────────
@@ -15,7 +14,6 @@ namespace FDNReverb {
 
     struct BiquadState {
         float s1{ 0.f }, s2{ 0.f };
-
         inline float tick(float x, const BiquadCoeffs& c) noexcept {
             float y = c.b0 * x + s1;
             s1 = c.b1 * x - c.a1 * y + s2;
@@ -36,10 +34,10 @@ namespace FDNReverb {
         BiquadCoeffs allpass1st(float fcHz, double sampleRate);
 
         // Design absorption filter cascade for delay lines
+        // 注: この関数は内部で MagnitudeResponseFitter を呼び出すラッパーになりました
         std::array<BiquadCoeffs, ABSO_STAGES> designAbsorption(
             int delaySamples, double sampleRate,
             const std::array<float, NUM_BANDS>& rt60,
             float hfDamping, float lfAbsorption);
     }
-
 } // namespace FDNReverb

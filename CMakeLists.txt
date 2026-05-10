@@ -1,17 +1,14 @@
 cmake_minimum_required(VERSION 3.22)
 project(Ambience VERSION 1.0.0 LANGUAGES C CXX)
-
 # ============================================================================
 # C++20
 # ============================================================================
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 # ============================================================================
 # JUCE
 # ============================================================================
 add_subdirectory(C:/JUCE ${CMAKE_BINARY_DIR}/JUCE)
-
 # ============================================================================
 # プラグイン定義
 # ============================================================================
@@ -22,19 +19,15 @@ juce_add_plugin(Ambience
     FORMATS                 VST3 Standalone
     PRODUCT_NAME            "Ambience"
     PLUGIN_DESCRIPTION      "8-channel FDN Algorithmic Reverb"
-
     IS_SYNTH                FALSE
     NEEDS_MIDI_INPUT        FALSE
     NEEDS_MIDI_OUTPUT       FALSE
     IS_MIDI_EFFECT          FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-
     VST3_AUTO_MANIFEST      FALSE
-
     COPY_PLUGIN_AFTER_BUILD FALSE
     VERSION                 "1.0.0"
 )
-
 # ============================================================================
 # ソース（存在するファイルのみ）
 # ============================================================================
@@ -46,17 +39,17 @@ target_sources(Ambience PRIVATE
     Source/PluginEditor.cpp
     Source/PluginParameters.h
     Source/PluginParameters.cpp
-
     # GUIモジュール
     Source/GUI/AmbienceUI.h
     Source/GUI/AmbienceUI.cpp
-
     # DSPモジュール
     Source/AlgorithmPresets.h
     Source/DSP/DSPConstants.h
     Source/DSP/DelayMemory.h
     Source/DSP/BiquadFilters.h
     Source/DSP/BiquadFilters.cpp
+    Source/DSP/MagnitudeResponseFitter.h
+    Source/DSP/MagnitudeResponseFitter.cpp
     Source/DSP/UniversalEngine.h
     Source/DSP/UniversalEngine.cpp
 )
@@ -68,7 +61,6 @@ target_include_directories(Ambience PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Source/DSP
     ${CMAKE_CURRENT_SOURCE_DIR}/Source/GUI
 )
-
 # ============================================================================
 # JUCE モジュール
 # ============================================================================
@@ -92,7 +84,6 @@ target_link_libraries(Ambience
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
 )
-
 # ============================================================================
 # コンパイル定義
 # ============================================================================
@@ -103,7 +94,6 @@ target_compile_definitions(Ambience PRIVATE
     JUCE_DISPLAY_SPLASH_SCREEN=0
     AMBIENCE_VERSION="1.0.0"
 )
-
 # ============================================================================
 # MSVC コンパイルオプション
 # ============================================================================
@@ -116,12 +106,10 @@ if(MSVC)
         $<$<CONFIG:Release>:/O2 /fp:fast>
     )
 endif()
-
 # ============================================================================
 # JUCE ヘッダー生成
 # ============================================================================
 juce_generate_juce_header(Ambience)
-
 # ============================================================================
 # ビルドメッセージ
 # ============================================================================
