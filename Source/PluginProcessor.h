@@ -40,11 +40,15 @@ public:
     float getC50() const noexcept { return engine.getC50(); }
     float getC80() const noexcept { return engine.getC80(); }
     float getEDT() const noexcept { return engine.getEDT(); }
+    // ─── 追加: プリセット選択時のデフォルト値ロード ───
+    void loadPresetDefaults(int algorithmIndex);
 
 private:
     void updateEngineParams();
 
     FDNReverb::UniversalEngine engine; // ← ここを変更
+    // ─── 追加: 前回のアルゴリズムインデックス（変更検出用） ───
+    int lastAlgorithmIndex{ -1 };
 
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampler;
     juce::AudioBuffer<float> wetBuffer;

@@ -25,6 +25,48 @@ namespace FDNReverb {
         std::array<float, NUM_BANDS> c80;   // Clarity 80 ms (dB)
     };
 
+    // ─────────────────────────────────────────────────────────────────────────────
+// PresetDefaults: 各プリセット選択時にロードされる推奨パラメータ
+// ─────────────────────────────────────────────────────────────────────────────
+//   プリセット選択時に、APVTSのこれらのパラメータが自動的にこの値にセットされる。
+//   ユーザーは選択直後から「そのプリセットらしい音」を即座に体験できる。
+//   選択後にユーザーが各パラメータを微調整することは可能。
+//
+//   設計方針:
+//     - decayTime は各プリセットの本来の中域 (500Hz) RT60 値
+//       → これにより decayScale = 1.0 となり、プリセット元のRTカーブが完全再現される
+//     - 他のパラメータは各プリセットの物理的特性に基づいた経験則値
+// ─────────────────────────────────────────────────────────────────────────────
+    struct PresetDefaults {
+        float roomSize;     // 0.5 ~ 2.0
+        float decayTime;    // 秒数 (プリセット元の中域RT60)
+        float hfDamp;       // 0.0 ~ 1.0
+        float lfAbsorb;     // 0.0 ~ 1.0
+        float diffusion;    // 0.0 ~ 1.0
+        float modAmount;    // 0.0 ~ 1.0
+        float modRate;      // 0.1 ~ 10 Hz
+        float erLevel;      // 0.0 ~ 1.0
+    };
+
+    // 各プリセットのデフォルト値
+        // インデックスは algorithmIndex に対応 (0=Room1, 1=Room2, ..., 6=Goldfoil)
+    static constexpr std::array<PresetDefaults, 7> PRESET_DEFAULTS = { {
+            // Room1: 小型ライブな部屋  decayTime = rt60[4] = 0.21秒
+            { 0.85f, 0.21f, 0.55f, 0.45f, 0.55f, 0.20f, 0.40f, 0.70f },
+            // Room2: 中型ライブな部屋  decayTime = rt60[4] = 1.38秒
+            { 1.00f, 1.38f, 0.50f, 0.40f, 0.60f, 0.25f, 0.45f, 0.65f },
+            // Hall1: 中型ホール  decayTime = rt60[4] = 1.89秒
+            { 1.30f, 1.89f, 0.45f, 0.35f, 0.70f, 0.30f, 0.30f, 0.60f },
+            // Hall2: 大型ホール  decayTime = rt60[4] = 2.08秒
+            { 1.50f, 2.08f, 0.50f, 0.30f, 0.75f, 0.30f, 0.30f, 0.55f },
+            // Plate: プレートリバーブ (金属板)  decayTime = rt60[4] = 1.1431秒
+            { 0.70f, 1.14f, 0.65f, 0.55f, 0.85f, 0.15f, 0.50f, 0.20f },
+            // Spring: スプリングリバーブ  decayTime = rt60[4] = 2.9252秒
+            { 0.50f, 2.93f, 0.70f, 0.60f, 0.65f, 0.26f, 0.33f, 0.10f },
+            // Goldfoil: 金箔リバーブ  decayTime = rt60[4] = 2.0642秒
+            { 0.95f, 2.06f, 0.55f, 0.40f, 0.80f, 0.35f, 0.45f, 0.30f }
+        } };
+
     struct AlgorithmPreset {
         const char* name;
         const char* description;

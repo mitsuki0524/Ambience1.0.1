@@ -27,6 +27,16 @@ void FDNReverbAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
 }
 
 void FDNReverbAudioProcessor::updateEngineParams() {
+    // ─── 追加: アルゴリズム変更を検出してデフォルト値をロード ───
+    int currentAlgo = (int)*apvts.getRawParameterValue(ParamID::Algorithm);
+    if (currentAlgo != lastAlgorithmIndex) {
+        if (lastAlgorithmIndex >= 0) {
+            // 初回起動時 (lastAlgorithmIndex = -1) は除く
+            // ステート復元時の意図しない上書きを防ぐ
+            loadPresetDefaults(currentAlgo);
+        }
+        lastAlgorithmIndex = currentAlgo;
+    }
     DSPParams p;
     p.algorithmIndex = (int)*apvts.getRawParameterValue(ParamID::Algorithm);
     p.preDelayMs = *apvts.getRawParameterValue(ParamID::PreDelay);
@@ -97,4 +107,37 @@ void FDNReverbAudioProcessor::setStateInformation(const void* d, int s) {
 }
 
 juce::AudioProcessorEditor* FDNReverbAudioProcessor::createEditor() { return new FDNReverbEditor(*this); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// プリセット選択時のデフォルト値ロード
+// ─────────────────────────────────────────────────────────────────────────────
+//   algorithmIndex 変更を検出したときに呼ばれる。
+//   APVTS の各パラメータを、選ばれたプリセットの推奨値にセットする。
+//   ユーザーが現在いじっているパラメータも上書きされるので注意。
+// ─────────────────────────────────────────────────────────────────────────────
+void FDNReverbAudioProcessor::loadPresetDefaults(int algorithmIndex) {
+    if (algorithmIndex < 0 || algorithmIndex >= 7) return;
+
+    const auto& def = PRESET_DEFAULTS[algorithmIndex];
+
+    // APVTS パラメータを更新
+    // sendNotificationSync で GUI に即座に反映
+    auto setParam = [this](const juce::String& paramID, float value) {
+        if (auto* param = apvts.getParameter(paramID)) {
+            // パラメータの正規化された値に変換してセット
+            float normalizedValue = param->convertTo0to1(value);
+            param->setValueNotifyingHost(normalizedValue);
+        }
+        };
+
+    setParam(ParamID::RoomSize, def.roomSize);
+    setParam(ParamID::DecayTime, def.decayTime);
+    setParam(ParamID::HFDamping, def.hfDamp);
+    setParam(ParamID::LFAbsorption, def.lfAbsorb);
+    setParam(ParamID::Diffusion, def.diffusion);
+    setParam(ParamID::ModAmount, def.modAmount);
+    setParam(ParamID::ModRate, def.modRate);
+    setParam(ParamID::ERLevel, def.erLevel);
+}
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new FDNReverbAudioProcessor(); }
