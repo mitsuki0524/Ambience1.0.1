@@ -40,6 +40,11 @@ public:
     float getC50() const noexcept { return engine.getC50(); }
     float getC80() const noexcept { return engine.getC80(); }
     float getEDT() const noexcept { return engine.getEDT(); }
+
+
+    // ─── 追加: UniversalEngine への直接アクセス（GUI 用） ───
+    const FDNReverb::UniversalEngine& getEngine() const noexcept { return engine; }
+
     // ─── 追加: プリセット選択時のデフォルト値ロード ───
     void loadPresetDefaults(int algorithmIndex);
 

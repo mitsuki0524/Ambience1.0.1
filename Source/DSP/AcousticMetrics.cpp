@@ -129,4 +129,40 @@ namespace FDNReverb {
         edt.store(edtVal, std::memory_order_relaxed);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 描画用: 指定時間オフセット秒前の瞬時エネルギーを取得
+    // ─────────────────────────────────────────────────────────────────────────────
+    //   secondsAgo: 何秒前のデータを取得するか
+    //   戻り値: その時点のエネルギー値 (二乗値、正規化なし)
+    //
+    //   GUI から呼ばれることを想定しており、リングバッファから直接読む。
+    //   範囲外の場合は 0 を返す。
+    // ─────────────────────────────────────────────────────────────────────────────
+    float AcousticMetrics::getEnergyAtTimeOffset(float secondsAgo) const noexcept {
+        if (energyHistory.empty()) return 0.0f;
+
+        const int bufferSize = static_cast<int>(energyHistory.size());
+        int offsetSamples = static_cast<int>(secondsAgo * static_cast<float>(sampleRate));
+
+        // 範囲チェック
+        if (offsetSamples < 0) offsetSamples = 0;
+        if (offsetSamples >= analysisWindowSamples) return 0.0f;
+
+        // リングバッファから読み出し
+        int readPos = (historyWritePos - 1 - offsetSamples + bufferSize) % bufferSize;
+        return energyHistory[readPos];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 入力アクティブ判定: 近時 50ms に有意なエネルギーがあるか
+    // ─────────────────────────────────────────────────────────────────────────────
+    //   GUI が「実測線を表示するかどうか」を判断するために使用。
+    //   閾値: -60dBFS 相当 (1e-6) のエネルギー
+    // ─────────────────────────────────────────────────────────────────────────────
+    bool AcousticMetrics::isActive() const noexcept {
+        // 50ms 内に有意なエネルギーがあるか判定
+        constexpr double kActivityThreshold = 1e-6;  // -60dBFS 相当
+        return recent50msEnergy > kActivityThreshold;
+    }
+
 }  // namespace FDNReverb

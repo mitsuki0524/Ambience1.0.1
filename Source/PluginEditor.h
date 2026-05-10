@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 #include "GUI/AmbienceUI.h"
+#include "GUI/DecayCurveViz.h"
 
 class FDNReverbEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
@@ -42,6 +43,8 @@ private:
     // Layout constants
     static constexpr int W = 900, H = 540, PAD = 8;
     static constexpr int KNOB_W = 64, KNOB_H = 72, KNOB_LBL_H = 14, UNIT_H = 88;
+
+    DecayCurveViz decayCurveViz;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FDNReverbEditor)
 };

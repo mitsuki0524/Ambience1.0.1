@@ -52,6 +52,20 @@ namespace FDNReverb {
         float getC80() const noexcept { return acousticMetrics.getC80(); }
         float getEDT() const noexcept { return theoreticalEDT; }
 
+        // ─── 追加: 描画用 AcousticMetrics への参照 ───
+        const AcousticMetrics& getAcousticMetrics() const noexcept { return acousticMetrics; }
+
+        // ─── 追加: ER タップデータへのアクセサ（GUI 用） ───
+        int getERTapCount() const noexcept { return currentERTapCount; }
+        float getERTapDelaySamples(int index) const noexcept {
+            return (index >= 0 && index < currentERTapCount) ? currentERDelaySamples[index] : 0.0f;
+        }
+        float getERTapGain(int index) const noexcept {
+            return (index >= 0 && index < currentERTapCount) ? currentERGains[index] : 0.0f;
+        }
+        double getSampleRate() const noexcept { return fs; }
+        bool isERBypassed() const noexcept { return bypassER; }
+
     private:
         void updateTopologyAndRouting();
         void calculatePrimePowerDelays();

@@ -48,6 +48,13 @@ namespace FDNReverb {
         float getC80() const noexcept { return c80.load(std::memory_order_relaxed); }
         float getEDT() const noexcept { return edt.load(std::memory_order_relaxed); }
 
+        // ─── 追加: 描画用エネルギー履歴アクセサ ───
+        // 指定時間オフセット秒前の瞬時エネルギー (二乗値) を取得
+        float getEnergyAtTimeOffset(float secondsAgo) const noexcept;
+
+        // 入力アクティブ判定 (近時 50ms に有意なエネルギーがあるか)
+        bool isActive() const noexcept;
+
         // ── リセット ──
         void reset() noexcept;
 
