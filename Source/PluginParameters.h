@@ -49,6 +49,7 @@ namespace FDNReverb {
         float duckingAttackMs{ 10.f };
         float duckingRelMs{ 200.f };
         float duckingThreshDB{ -20.f };
+        int   oversamplingIdx{ 0 };   // ← この1行を追加 (0=1x, 1=2x, 2=4x, 3=8x)
     };
 
     class ParameterHelper {

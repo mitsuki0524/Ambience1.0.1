@@ -2,30 +2,35 @@
 #include "DelayMemory.h"
 #include "BiquadFilters.h"
 #include "MagnitudeResponseFitter.h"
-#include "AcousticMetrics.h"      // ← 追加
+#include "AcousticMetrics.h"
+#include "Saturator.h"
 #include "../PluginParameters.h"
 #include <array>
 #include <random>
-#include "Saturator.h"
 
 #define AMBIENCE_USE_STAGE2_ABSORPTION 1
 
 namespace FDNReverb {
+
     enum class ReverbTopology { Room, Hall, Plate, Spring, Goldfoil };
 
-    // RandomWalkLFO 構造体は変更なし
+    // ─────────────────────────────────────────────────────────────────────────────
+    //  RandomWalkLFO: 非相関ノイズベースのモジュレーション
+    // ─────────────────────────────────────────────────────────────────────────────
     struct RandomWalkLFO {
         float value{ 0.0f };
         float target{ 0.0f };
         float coeff{ 0.005f };
         int stepsRemaining{ 0 };
         uint32_t state{ 12345 };
+
         inline float nextRandom() noexcept {
             state ^= state << 13;
             state ^= state >> 17;
             state ^= state << 5;
             return (state * 2.3283064365386963e-10f) * 2.0f - 1.0f;
         }
+
         inline float tick(float rateHz, float sampleRate) noexcept {
             if (stepsRemaining <= 0) {
                 target = nextRandom();
@@ -38,27 +43,30 @@ namespace FDNReverb {
         }
     };
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    //  UniversalEngine: 16ch FWHT FDN リバーブのメインエンジン
+    // ─────────────────────────────────────────────────────────────────────────────
     class UniversalEngine {
     public:
         UniversalEngine();
+
         void prepare(double sampleRate, int maxBlockSize);
         void reset();
         void setParams(const DSPParams& p);
-        void processBlock(const float* inL, const float* inR, float* outL, float* outR, int numSamples) noexcept;
+        void processBlock(const float* inL, const float* inR,
+            float* outL, float* outR, int numSamples) noexcept;
+
+        // ── 既存のアクセサ ──
         std::array<float, NUM_BANDS> getEffectiveRT60() const noexcept { return effectiveRT60; }
 
-        // ─── 追加: AcousticMetrics へのアクセサ ───
+        // ── AcousticMetrics アクセサ ──
         float getD50() const noexcept { return acousticMetrics.getD50(); }
         float getC50() const noexcept { return acousticMetrics.getC50(); }
         float getC80() const noexcept { return acousticMetrics.getC80(); }
         float getEDT() const noexcept { return theoreticalEDT; }
-
-
-
-        // ─── 追加: 描画用 AcousticMetrics への参照 ───
         const AcousticMetrics& getAcousticMetrics() const noexcept { return acousticMetrics; }
 
-        // ─── 追加: ER タップデータへのアクセサ（GUI 用） ───
+        // ── ER タップデータアクセサ (GUI 用) ──
         int getERTapCount() const noexcept { return currentERTapCount; }
         float getERTapDelaySamples(int index) const noexcept {
             return (index >= 0 && index < currentERTapCount) ? currentERDelaySamples[index] : 0.0f;
@@ -75,22 +83,26 @@ namespace FDNReverb {
         inline void fastWalshHadamardTransform(std::array<float, 16>& v) noexcept;
         inline void applySignFlipping(std::array<float, 16>& v) noexcept;
 
+        // ── 基本パラメータ ──
         DelayMemoryPool memoryPool;
         double fs{ 48000.0 };
         DSPParams activeParams;
         ReverbTopology currentTopology{ ReverbTopology::Room };
 
+        // ── FDN 構成 ──
         static constexpr int FDN_ORDER = 16;
         LinearDelayLine erDelay;
-        std::array<float, 16> erTaps;
+        std::array<float, 16> erTaps;  // (将来用、現在未使用)
         std::array<LinearDelayLine, 4> inputDiffusers;
         std::array<LinearDelayLine, FDN_ORDER> fdnDelays;
         std::array<LinearDelayLine, FDN_ORDER> nestedAllpassDelays;
-        // 現在のERパターン（プリセット選択時に更新）
+
+        // ── ER パターン (プリセット選択時に更新) ──
         int currentERTapCount{ 0 };
         std::array<float, MAX_ER_TAPS> currentERDelaySamples;
         std::array<float, MAX_ER_TAPS> currentERGains;
 
+        // ── 吸収フィルタ ──
 #if AMBIENCE_USE_STAGE2_ABSORPTION
         std::array<std::array<BiquadState, ABSO_STAGES_S2>, FDN_ORDER> absorptionFiltersS2;
         std::array<std::array<BiquadCoeffs, ABSO_STAGES_S2>, FDN_ORDER> currentAbsorptionCoeffsS2;
@@ -99,25 +111,28 @@ namespace FDNReverb {
         std::array<BiquadCoeffs, FDN_ORDER> currentAbsorptionCoeffs;
 #endif
 
+        // ── モジュレーション ──
         std::array<RandomWalkLFO, FDN_ORDER> lfos;
         std::array<float, FDN_ORDER> fdnBaseDelaySamples;
         std::array<float, FDN_ORDER> fbVec;
 
+        // ── トポロジー固有設定 ──
         float apfGain{ 0.618f };
         bool bypassER{ false };
         bool bypassInputDiffusers{ true };
         float lateMixScale{ 1.0f };
         float lateMakeupGainLinear{ 1.0f };
-        std::array<float, NUM_BANDS> effectiveRT60;
-        // 既存の effectiveRT60 の近くに追加
-        float theoreticalEDT{ 0.0f };  // EDT理論値 (秒)
 
-        // ─── 追加: AcousticMetrics インスタンス ───
+        // ── RT60/EDT データ ──
+        std::array<float, NUM_BANDS> effectiveRT60;
+        float theoreticalEDT{ 0.0f };
+
+        // ── AcousticMetrics ──
         AcousticMetrics acousticMetrics;
 
-        // ─── Saturator (L/R 独立) ───
+        // ── Saturator (L/R 独立、内蔵 OS 対応) ──
         Saturator saturatorL;
         Saturator saturatorR;
-
     };
+
 }  // namespace FDNReverb

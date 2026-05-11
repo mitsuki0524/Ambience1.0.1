@@ -59,6 +59,11 @@ void FDNReverbAudioProcessor::updateEngineParams() {
     p.duckingRelMs = *apvts.getRawParameterValue(ParamID::DuckRelease);
     p.duckingThreshDB = *apvts.getRawParameterValue(ParamID::DuckThresh);
 
+    // ─── 追加: Oversampling 倍率を取得 ───
+    // GUI ドロップダウン値 (0=1x, 1=2x, 2=4x, 3=8x) を UniversalEngine に渡す
+    // UniversalEngine 内で 8x は 4x にクリップされる (資料の方針通り)
+    p.oversamplingIdx = (int)*apvts.getRawParameterValue("oversampling");
+
     smoothWetGain.setTargetValue(juce::Decibels::decibelsToGain(p.wetDB));
     smoothDryGain.setTargetValue(juce::Decibels::decibelsToGain(p.dryDB));
 
