@@ -176,6 +176,7 @@ void FDNReverbAudioProcessor::loadPresetDefaults(int algorithmIndex) {
     setParam(ParamID::ModAmount, def.modAmount);
     setParam(ParamID::ModRate, def.modRate);
     setParam(ParamID::ERLevel, def.erLevel);
+    setParam(ParamID::Saturation, def.saturation);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() {

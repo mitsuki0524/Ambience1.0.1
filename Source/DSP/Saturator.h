@@ -82,9 +82,9 @@ namespace FDNReverb {
             currentAmount = amount;
             // 共通のドライブカーブ: 1.0 → 4.0 を 2 次でマッピング
             // (低 amount では穏やか、高 amount では急峻に倍音が出始める)
-            drive = 1.0f + amount * amount * 3.0f;
+            drive = 1.0f + amount * amount * 2.0f;
             wetMix = amount;
-            dryMix = 1.0f - amount * 0.5f;  // amount=1 でも dry を 0.5 残し、芯を保つ
+            dryMix = 1.0f - amount * 0.5f;  // amount=1 でも dry を 0.5 残  し、芯を保つ
         }
 
         // ─── サンプル単位の処理 (オーディオスレッドから呼ぶ) ───
