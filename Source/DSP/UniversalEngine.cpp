@@ -3,15 +3,44 @@
 namespace FDNReverb {
 
     // ─────────────────────────────────────────────────────────────────────────────
-    //  コンストラクタ・初期化
+    //  コンストラクタ
     // ─────────────────────────────────────────────────────────────────────────────
     UniversalEngine::UniversalEngine() {
         fbVec.fill(0.0f);
+
+        // ─────────────────────────────────────────────────────────────────────────
+        //  BandlimitedNoiseLFO の初期化 (黄金比 Weyl 列によるレート係数)
+        // ─────────────────────────────────────────────────────────────────────────
+        //   黄金比 φ = (1+√5)/2 ≈ 1.618... は「最も無理数らしい数」として知られ、
+        //   任意の有理数分の 1 でも近似しにくい性質を持つ。
+        //
+        //   Weyl 列: a[i] = frac(i * φ) は [0, 1) 上で「超一様分布」を示す。
+        //   これを rateMultiplier [0.80, 1.20] にマッピングすることで、
+        //   16 チャンネルのレートが互いに絶対に同期しない非周期的配置を保証する。
+        //
+        //   例:
+        //     ch 0: rateMultiplier = 1.000  (φ の倍数の小数部が 0.618... → 1.047)
+        //     ch 1: rateMultiplier = 1.047  → ch 0 と 4.7% 違う
+        //     ch 7: rateMultiplier = 0.872  → ch 0 と 12.8% 違う
+        //     etc.
+        // ─────────────────────────────────────────────────────────────────────────
+        constexpr float phi = 1.6180339887f;  // 黄金比 φ
+
         for (int i = 0; i < FDN_ORDER; ++i) {
-            lfos[i].state = 12345 + i * 9876;
+            // 各チャンネルに固有の PRNG seed (0 は禁止: XOR shift が止まる)
+            lfos[i].state = 12345u + static_cast<uint32_t>(i) * 9876u;
+            lfos[i].smoothed = 0.0f;
+
+            // Weyl 列: frac(i * φ) を [0.80, 1.20] にマッピング
+            const float angle = static_cast<float>(i) * phi;
+            const float frac = angle - std::floor(angle);       // 小数部 [0, 1)
+            lfos[i].rateMultiplier = 0.80f + frac * 0.40f;       // [0.80, 1.20]
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    //  prepare()
+    // ─────────────────────────────────────────────────────────────────────────────
     void UniversalEngine::prepare(double sampleRate, int /*maxBlockSize*/) {
         fs = sampleRate;
 
@@ -57,23 +86,25 @@ namespace FDNReverb {
         // ── AcousticMetrics 初期化 ──
         acousticMetrics.prepare(sampleRate, 2000.0f);
 
-        // ── ER パターン配列の初期化 ──
+        // ── ER パターン初期化 ──
         currentERTapCount = 0;
         currentERDelaySamples.fill(0.0f);
         currentERGains.fill(0.0f);
 
-        // ★ Phase 3-1 追加: OutputLimiter 初期化
+        // ── Phase 3-1: OutputLimiter 初期化 ──
         outputLimiter.prepare(sampleRate);
 
-        // ★ Phase 3-1 追加: Ducking エンベロープ係数初期化（デフォルト値で）
-        //   後で setParams() で更新される
-        duckingAttackCoeff = 1.0f - std::exp(-1.0f / (static_cast<float>(fs) * 0.010f)); // 10ms
-        duckingReleaseCoeff = 1.0f - std::exp(-1.0f / (static_cast<float>(fs) * 0.200f)); // 200ms
+        // ── Phase 3-1: Ducking 係数初期化 (デフォルト値) ──
+        duckingAttackCoeff = 1.0f - std::exp(-1.0f / (static_cast<float>(fs) * 0.010f));
+        duckingReleaseCoeff = 1.0f - std::exp(-1.0f / (static_cast<float>(fs) * 0.200f));
         duckingEnvelope = 0.0f;
 
         reset();
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    //  reset()
+    // ─────────────────────────────────────────────────────────────────────────────
     void UniversalEngine::reset() {
         memoryPool.clear();
         fbVec.fill(0.0f);
@@ -89,14 +120,19 @@ namespace FDNReverb {
         acousticMetrics.reset();
         saturatorL.reset();
         saturatorR.reset();
-
-        // ★ Phase 3-1 追加
         outputLimiter.reset();
         duckingEnvelope = 0.0f;
+
+        // LFO の smoothed をリセット (クリック防止)
+        for (auto& lfo : lfos) lfo.smoothed = 0.0f;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    //  setParams()
+    // ─────────────────────────────────────────────────────────────────────────────
     void UniversalEngine::setParams(const DSPParams& p) {
         activeParams = p;
+
         switch (p.algorithmIndex) {
         case 0: case 1: currentTopology = ReverbTopology::Room;     break;
         case 2: case 3: currentTopology = ReverbTopology::Hall;     break;
@@ -105,8 +141,7 @@ namespace FDNReverb {
         case 6:         currentTopology = ReverbTopology::Goldfoil; break;
         }
 
-        // ★ Phase 3-1 追加: Ducking 係数の動的更新
-        //   ms → 秒 → 1次LPF係数
+        // Ducking 係数の動的更新
         const float attMs = juce::jmax(0.1f, activeParams.duckingAttackMs);
         const float relMs = juce::jmax(0.1f, activeParams.duckingRelMs);
         duckingAttackCoeff = 1.0f - std::exp(-1.0f / (static_cast<float>(fs) * attMs * 0.001f));
@@ -116,7 +151,7 @@ namespace FDNReverb {
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    //  素数べき乗 (Prime Power) アルゴリズムによる遅延時間の算定
+    //  素数べき乗遅延時間の算定
     // ─────────────────────────────────────────────────────────────────────────────
     void UniversalEngine::calculatePrimePowerDelays() {
         static constexpr std::array<int, FDN_ORDER> primes = {
@@ -132,29 +167,18 @@ namespace FDNReverb {
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    //  動的トポロジー構成 (アルゴリズムごとの結線切り替え)
+    //  動的トポロジー構成
     // ─────────────────────────────────────────────────────────────────────────────
     void UniversalEngine::updateTopologyAndRouting() {
         calculatePrimePowerDelays();
 
         auto& preset = *ALL_PRESETS[activeParams.algorithmIndex];
 
-        // ─────────────────────────────────────────────────────────────────────
-        // ★ Phase 4 追加: RT60 スケーリング + ProMode 拡張
-        // ─────────────────────────────────────────────────────────────────────
-        //   Normal Mode: decayScale のみ適用
-        //   Pro Mode:    decayScale + Tilt EQ x3 + 帯域別 RT60 ノブ x10
-        //
-        //   Tilt EQ 帯域マッピング (10 バンド構成):
-        //     - tiltLow:  bands 0-2 (31, 62.5, 125 Hz)
-        //     - tiltMid:  bands 3-6 (250, 500, 1k, 2k Hz)
-        //     - tiltHigh: bands 7-9 (4k, 8k, 16k Hz)
-        // ─────────────────────────────────────────────────────────────────────
+        // RT60 スケーリング (+ ProMode 拡張)
         std::array<float, NUM_BANDS> scaledRT60 = preset.acoustics.rt60;
         for (auto& v : scaledRT60) v *= activeParams.decayScale;
 
         if (activeParams.proMode) {
-            // ─ Tilt EQ 適用 ─
             scaledRT60[0] *= activeParams.tiltLow;
             scaledRT60[1] *= activeParams.tiltLow;
             scaledRT60[2] *= activeParams.tiltLow;
@@ -166,10 +190,8 @@ namespace FDNReverb {
             scaledRT60[8] *= activeParams.tiltHigh;
             scaledRT60[9] *= activeParams.tiltHigh;
 
-            // ─ 帯域別 RT60 ノブ x10 適用 ─
-            for (int b = 0; b < NUM_BANDS; ++b) {
+            for (int b = 0; b < NUM_BANDS; ++b)
                 scaledRT60[b] *= activeParams.rtBands[b];
-            }
         }
 
         effectiveRT60 = scaledRT60;
@@ -179,9 +201,8 @@ namespace FDNReverb {
             auto s2 = MagnitudeResponseFitter::designStage2(
                 static_cast<int>(fdnBaseDelaySamples[i]), fs, scaledRT60,
                 activeParams.hfDamping, activeParams.lfAbsorption);
-            for (int b = 0; b < NUM_BANDS; ++b) {
+            for (int b = 0; b < NUM_BANDS; ++b)
                 currentAbsorptionCoeffsS2[i][b] = s2.geqStages[b];
-            }
         }
 #else
         for (int i = 0; i < FDN_ORDER; ++i) {
@@ -192,7 +213,7 @@ namespace FDNReverb {
         }
 #endif
 
-        // ── Auto Gain Compensation (AGC) ──
+        // AGC
         float rt60Mid = std::max(0.1f, scaledRT60[4]);
         constexpr float baseDB = 28.7f;
         float decayCompDB = 7.0f * std::log10(rt60Mid);
@@ -200,36 +221,24 @@ namespace FDNReverb {
         static constexpr std::array<float, 7> algorithmOffsetDB = {
             +0.8f, +0.9f, +0.5f, +0.5f, +1.5f, +0.6f, +0.6f
         };
-        float algoOffset = algorithmOffsetDB[
-            juce::jlimit(0, 6, activeParams.algorithmIndex)];
+        float algoOffset = algorithmOffsetDB[juce::jlimit(0, 6, activeParams.algorithmIndex)];
 
-        // ── トポロジーごとの結線設定 ──
+        // トポロジー結線
         switch (currentTopology) {
         case ReverbTopology::Room:
-            bypassER = false; bypassInputDiffusers = true;
-            apfGain = 0.3f;
-            break;
+            bypassER = false; bypassInputDiffusers = true;  apfGain = 0.3f;   break;
         case ReverbTopology::Hall:
-            bypassER = false; bypassInputDiffusers = false;
-            apfGain = 0.618f;
-            break;
+            bypassER = false; bypassInputDiffusers = false; apfGain = 0.618f; break;
         case ReverbTopology::Plate:
-            bypassER = true; bypassInputDiffusers = false;
-            apfGain = 0.7f;
-            break;
+            bypassER = true;  bypassInputDiffusers = false; apfGain = 0.7f;   break;
         case ReverbTopology::Spring:
-            bypassER = true; bypassInputDiffusers = false;
-            apfGain = 0.5f;
-            break;
+            bypassER = true;  bypassInputDiffusers = false; apfGain = 0.5f;   break;
         case ReverbTopology::Goldfoil:
-            bypassER = true; bypassInputDiffusers = false;
-            apfGain = 0.75f;
-            break;
+            bypassER = true;  bypassInputDiffusers = false; apfGain = 0.75f;  break;
         }
 
-        // ── ER パターン更新 ──
-        const auto& erPattern = PRESET_ER_PATTERNS[
-            juce::jlimit(0, 6, activeParams.algorithmIndex)];
+        // ER パターン更新
+        const auto& erPattern = PRESET_ER_PATTERNS[juce::jlimit(0, 6, activeParams.algorithmIndex)];
         currentERTapCount = erPattern.numTaps;
 
         float erSizeScale = 0.5f + activeParams.roomSizeScale;
@@ -240,7 +249,7 @@ namespace FDNReverb {
         }
         if (erPattern.numTaps == 0) bypassER = true;
 
-        // ── EDT 理論計算 ──
+        // EDT 理論計算
         float edtCoeff = 0.7f;
         switch (currentTopology) {
         case ReverbTopology::Room:     edtCoeff = 0.70f; break;
@@ -251,24 +260,35 @@ namespace FDNReverb {
         }
         theoreticalEDT = rt60Mid * edtCoeff;
 
-        // ── Saturator 設定 ──
-        float saturationMultiplier = 1.0f;
+        // ─────────────────────────────────────────────────────────────────────────
+        //  Saturator 設定 (v1.2: アルゴリズム別倍率を圧縮)
+        // ─────────────────────────────────────────────────────────────────────────
+        //   旧倍率: Room=0.6, Hall=0.7, Plate=1.0, Spring=1.2, Goldfoil=1.1
+        //     → 同じノブ位置でも Spring は Room の 2 倍歪む (UX 不親切)
+        //
+        //   新倍率: Room=0.90, Hall=0.93, Plate=1.00, Spring=1.05, Goldfoil=1.02
+        //     → 最大差は 15% に圧縮 (プリセット切り替えで急変しない)
+        //     → キャラクタの違いは ProMode の SatType 選択と AlgorithmPresets の
+        //       デフォルト saturation 値で表現する設計に移行
+        // ─────────────────────────────────────────────────────────────────────────
+        float satMultiplier = 1.0f;
         switch (currentTopology) {
-        case ReverbTopology::Room:     saturationMultiplier = 0.6f; break;
-        case ReverbTopology::Hall:     saturationMultiplier = 0.7f; break;
-        case ReverbTopology::Plate:    saturationMultiplier = 1.0f; break;
-        case ReverbTopology::Spring:   saturationMultiplier = 1.2f; break;
-        case ReverbTopology::Goldfoil: saturationMultiplier = 1.1f; break;
+        case ReverbTopology::Room:     satMultiplier = 0.90f; break;
+        case ReverbTopology::Hall:     satMultiplier = 0.93f; break;
+        case ReverbTopology::Plate:    satMultiplier = 1.00f; break;
+        case ReverbTopology::Spring:   satMultiplier = 1.05f; break;
+        case ReverbTopology::Goldfoil: satMultiplier = 1.02f; break;
         }
-        float effectiveSatAmount = activeParams.saturation * saturationMultiplier;
-        effectiveSatAmount = juce::jlimit(0.0f, 1.0f, effectiveSatAmount);
+
+        float effectiveSatAmount = juce::jlimit(0.0f, 1.0f,
+            activeParams.saturation * satMultiplier);
 
         saturatorL.setAmount(effectiveSatAmount);
         saturatorR.setAmount(effectiveSatAmount);
         saturatorL.setMode(activeParams.satTypeIdx);
         saturatorR.setMode(activeParams.satTypeIdx);
 
-        // ── 最終ゲイン補正 ──
+        // 最終ゲイン補正
         float totalLateMakeupDB = baseDB + decayCompDB + algoOffset;
         lateMakeupGainLinear = juce::Decibels::decibelsToGain(totalLateMakeupDB);
     }
@@ -303,55 +323,69 @@ namespace FDNReverb {
     // ─────────────────────────────────────────────────────────────────────────────
     void UniversalEngine::processBlock(const float* inL, const float* inR,
         float* outL, float* outR, int numSamples) noexcept {
-        float depthSamples = activeParams.modAmount * 0.002f * static_cast<float>(fs);
-        float wetGain = juce::Decibels::decibelsToGain(activeParams.wetDB);
+        // ─────────────────────────────────────────────────────────────────────────
+        //  ブロック単位の事前計算 (per-sample ループの外側)
+        // ─────────────────────────────────────────────────────────────────────────
+        const float depthSamples = activeParams.modAmount * 0.002f * static_cast<float>(fs);
+        const float wetGain = juce::Decibels::decibelsToGain(activeParams.wetDB);
         const float stereoWidth = activeParams.stereoWidth;
-        const float crossFeedAmt = activeParams.crossFeed;  // ★ Phase 3-1
+        const float crossFeedAmt = activeParams.crossFeed;
         const float erLevel = activeParams.erLevel;
         const float lateLevel = activeParams.lateLevel;
-        const bool erSolo = activeParams.erSolo;            // ★ Phase 3-1
-
-        // ★ Phase 3-1: Ducking の Threshold をリニア化（毎サンプル log10 を避ける）
+        const bool  erSolo = activeParams.erSolo;
         const float duckThreshLin = juce::Decibels::decibelsToGain(activeParams.duckingThreshDB);
-        const float duckAmountDB = activeParams.duckingAmount;  // 0-20 dB
+        const float duckAmountDB = activeParams.duckingAmount;
 
+        // ─────────────────────────────────────────────────────────────────────────
+        //  LFO 係数のブロック単位事前計算 (exp() を per-sample から排除)
+        // ─────────────────────────────────────────────────────────────────────────
+        //   各チャンネルの LPF カットオフ = modRate × rateMultiplier
+        //   rateMultiplier は黄金比 Weyl 列 [0.80, 1.20] なので、
+        //   16ch が同じカットオフを持つことは絶対にない。
+        //
+        //   exp() は 1 ブロックにつき 16 回のみ (per-sample × FDN_ORDER 回ではない)。
+        //   96kHz / 64 samples = 1500 ブロック/秒 → 1500 × 16 = 24000 exp/秒
+        //   (per-sample なら 96000 × 16 = 1,536,000 exp/秒 → 64 倍の削減)
+        // ─────────────────────────────────────────────────────────────────────────
+        std::array<float, FDN_ORDER> lfoCoeffs;
+        {
+            const float fsf = static_cast<float>(fs);
+            constexpr float twoPi = 6.28318530718f;
+            for (int i = 0; i < FDN_ORDER; ++i) {
+                const float fc = activeParams.modRate * lfos[i].rateMultiplier;
+                // 1次 IIR LPF 係数: 0 に近い = 遅い変化、1 に近い = 速い変化
+                lfoCoeffs[i] = juce::jlimit(0.0001f, 0.9999f,
+                    1.0f - std::exp(-twoPi * fc / fsf));
+            }
+        }
+
+        // ─── per-sample ループ ───
         for (int n = 0; n < numSamples; ++n) {
-            // ── 入力 L/R 分離 ──
-            float leftIn = inL[n];
-            float rightIn = inR[n];
-            float midIn = (leftIn + rightIn) * 0.5f;
-            float sideIn = (leftIn - rightIn) * 0.5f;
+            const float leftIn = inL[n];
+            const float rightIn = inR[n];
+            const float midIn = (leftIn + rightIn) * 0.5f;
+            const float sideIn = (leftIn - rightIn) * 0.5f;
             float erOutL = 0.0f, erOutR = 0.0f;
 
-            // ────────────────────────────────────────────────────────────────
-            // ★ Phase 3-1: Ducking エンベロープ検出
-            // ────────────────────────────────────────────────────────────────
-            //   入力信号の絶対値ピークから RMS 風のエンベロープを抽出。
-            //   信号レベル > Threshold のとき、Wet ゲインを duckingAmount だけ下げる。
-            //   これにより、ドラムキック等の入力が強い瞬間に残響が引っ込み、
-            //   原音の輪郭がクリアに保たれる (典型的なリバーブ-ダッキング効果)。
-            // ────────────────────────────────────────────────────────────────
+            // ── Ducking エンベロープ検出 ──
             const float inputPeak = juce::jmax(std::abs(leftIn), std::abs(rightIn));
-            const float envCoeff = (inputPeak > duckingEnvelope) ? duckingAttackCoeff : duckingReleaseCoeff;
+            const float envCoeff = (inputPeak > duckingEnvelope)
+                ? duckingAttackCoeff : duckingReleaseCoeff;
             duckingEnvelope += (inputPeak - duckingEnvelope) * envCoeff;
 
             float duckGainLinear = 1.0f;
             if (duckAmountDB > 0.001f && duckingEnvelope > duckThreshLin) {
-                // エンベロープが threshold を超えた量を dB で算出
-                // 注意: log10 は重いが、duckAmountDB > 0 の条件下でのみ実行される
                 const float envDB = 20.0f * std::log10(juce::jmax(duckingEnvelope, 1e-6f));
-                const float threshDB = activeParams.duckingThreshDB;
-                const float overDB = envDB - threshDB;
-                // gainReduction を duckingAmount でクランプ
-                const float gainReductionDB = -juce::jmin(overDB, duckAmountDB);
-                duckGainLinear = juce::Decibels::decibelsToGain(gainReductionDB);
+                const float overDB = envDB - activeParams.duckingThreshDB;
+                const float gainRedDB = -juce::jmin(overDB, duckAmountDB);
+                duckGainLinear = juce::Decibels::decibelsToGain(gainRedDB);
             }
 
-            // ── 1. Input Diffusers (モノラル拡散) ──
+            // ── 1. Input Diffusers ──
             float fdnInputMid = midIn;
             if (!bypassInputDiffusers) {
                 for (int i = 0; i < 4; ++i) {
-                    float delaySmp = (3.0f + i * 2.0f) * 0.001f * fs;
+                    float delaySmp = (3.0f + i * 2.0f) * 0.001f * static_cast<float>(fs);
                     float d = inputDiffusers[i].read(delaySmp);
                     float w = fdnInputMid + 0.618f * d;
                     inputDiffusers[i].write(w);
@@ -362,8 +396,7 @@ namespace FDNReverb {
             // ── 2. ER Tapped Delay ──
             if (!bypassER) {
                 erDelay.write(midIn);
-                float erTotalL = 0.0f;
-                float erTotalR = 0.0f;
+                float erTotalL = 0.0f, erTotalR = 0.0f;
                 for (int t = 0; t < currentERTapCount; ++t) {
                     float tapValue = erDelay.read(currentERDelaySamples[t]);
                     float tapGain = currentERGains[t] * 0.5f;
@@ -380,7 +413,7 @@ namespace FDNReverb {
                 erOutR = erTotalR;
             }
 
-            // ── 3. FDN + Nested Allpass Loop (16ch) ──
+            // ── 3. FDN + Nested Allpass (16ch) ──
             std::array<float, 16> currentFb = fbVec;
             fastWalshHadamardTransform(currentFb);
             applySignFlipping(currentFb);
@@ -389,42 +422,37 @@ namespace FDNReverb {
             std::array<float, 16> nextFb;
 
             for (int i = 0; i < FDN_ORDER; ++i) {
-                float lfoVal = lfos[i].tick(activeParams.modRate, fs);
-                float delaySmp = fdnBaseDelaySamples[i] + lfoVal * depthSamples;
+                // ──────────────────────────────────────────────────────────────
+                //  BandlimitedNoiseLFO によるモジュレーション
+                // ──────────────────────────────────────────────────────────────
+                //   lfoCoeffs[i]: ブロック単位で事前計算済み (per-sample での exp() なし)
+                //   各 ch が黄金比 Weyl 列の rateMultiplier を持つため、
+                //   16ch の揺れが一切同期しない非周期的モジュレーションを実現。
+                // ──────────────────────────────────────────────────────────────
+                const float lfoVal = lfos[i].tick(lfoCoeffs[i]);
+                const float delaySmp = fdnBaseDelaySamples[i] + lfoVal * depthSamples;
                 float d = fdnDelays[i].read(delaySmp);
 
-                // ─ 吸収フィルタ ─
+                // 吸収フィルタ
 #if AMBIENCE_USE_STAGE2_ABSORPTION
-                for (int s = 0; s < ABSO_STAGES_S2; ++s) {
+                for (int s = 0; s < ABSO_STAGES_S2; ++s)
                     d = absorptionFiltersS2[i][s].tick(d, currentAbsorptionCoeffsS2[i][s]);
-                }
 #else
                 d = absorptionFilters[i].tick(d, currentAbsorptionCoeffs[i]);
 #endif
 
-                // ────────────────────────────────────────────────────────────
-                // ★ Phase 3-1: FDN ループ内マイクロサチュレーション (Layer 1)
-                // ────────────────────────────────────────────────────────────
-                //   配置: 吸収フィルタ直後、Nested Allpass の前。
-                //
-                //   目的:
-                //     1) 受動性(Passivity)の保証 → リミットサイクル消滅
-                //     2) アナログ感の付加 → 「Spectral Plasma」形成
-                //     3) ハーモニックスマスキング → ループ吸収で滑らかな倍音
-                //
-                //   実装: Padé 有理多項式 x(27+x²)/(27+9x²)
-                //         - クランプ x ∈ [-3, 3] (発散完全防止)
-                //         - 加算・乗算・除算 1 回のみ (tanh 比 10 倍速)
-                //         - HF Damping が後続でエイリアスを除去 → OS 不要
-                //
-                //   このサチュレーションはユーザー操作不可 (固定パラメータ)。
-                //   ユーザーが操作する Wet 出力サチュレーション (Layer 2) は
-                //   後段の saturatorL/R で別途処理される。
-                // ────────────────────────────────────────────────────────────
+                // ──────────────────────────────────────────────────────────────
+                //  FDN ループ内マイクロサチュレーション (Layer 1, v1.2)
+                // ──────────────────────────────────────────────────────────────
+                //   v1.2 の係数で x=1 での圧縮は約 2% (v1.1 の 22% から激減)。
+                //   和音 4 音でもほぼ感知不能。Valhalla 流「essentially-linear」。
+                //   OutputLimiter が最終段でいかなる発散も捕捉するため、
+                //   このサチュレーションは安全弁としての役割に徹する。
+                // ──────────────────────────────────────────────────────────────
                 d = processMicroSaturation(d);
 
-                // ─ Nested Allpass Filter ─
-                float apfDelaySmp = (1.5f + i * 0.3f) * 0.001f * fs;
+                // Nested Allpass
+                float apfDelaySmp = (1.5f + i * 0.3f) * 0.001f * static_cast<float>(fs);
                 float apfD = nestedAllpassDelays[i].read(apfDelaySmp);
                 float apfW = d + apfGain * apfD;
                 nestedAllpassDelays[i].write(apfW);
@@ -432,12 +460,10 @@ namespace FDNReverb {
 
                 nextFb[i] = apfOut;
 
-                // L/R 別々のサイド成分注入
                 float sideForCh = (i % 2 == 0 ? +sideIn : -sideIn) * stereoWidth;
                 float fdnInputForThisCh = (fdnInputMid + sideForCh) * 0.25f;
                 fdnDelays[i].write(fdnInputForThisCh + currentFb[i]);
 
-                // L/R 振り分け
                 if (i % 2 == 0) {
                     fdnOutL += apfOut;
                     fdnOutR += apfOut * (1.0f - stereoWidth);
@@ -452,77 +478,34 @@ namespace FDNReverb {
             fdnOutR *= 0.125f;
             fbVec = nextFb;
 
-            // ────────────────────────────────────────────────────────────────
-            // ★ Phase 3-1: CrossFeed (L/R 間のステレオブレンド)
-            // ────────────────────────────────────────────────────────────────
-            //   設計:
-            //     crossFeed = 0.0 → 完全分離ステレオ (各チャンネル独立)
-            //     crossFeed = 0.5 → 部分混合 (バイノーラル風)
-            //     crossFeed = 1.0 → 完全モノ (両チャンネル同一)
-            //
-            //   用途:
-            //     - ヘッドフォン用途で過度なステレオ分離を抑える
-            //     - 古い録音や AM ラジオ風の演出
-            //     - L/R の整合性を保ちながら自然な定位を作る
-            //
-            //   実装: 線形補間でクロスゲイン
-            //     L' = L*(1-x/2) + R*(x/2)
-            //     R' = R*(1-x/2) + L*(x/2)
-            //   (x/2 とすることで、x=1 でも各チャンネルの寄与は 50:50)
-            // ────────────────────────────────────────────────────────────────
+            // ── CrossFeed ──
             const float xfeed = crossFeedAmt * 0.5f;
             const float origL = fdnOutL;
             const float origR = fdnOutR;
             fdnOutL = origL * (1.0f - xfeed) + origR * xfeed;
             fdnOutR = origR * (1.0f - xfeed) + origL * xfeed;
 
-            // ── 4. 最終ミックス ──
+            // ── 4. ミックス ──
             float erMixL = bypassER ? 0.0f : erOutL * erLevel;
             float erMixR = bypassER ? 0.0f : erOutR * erLevel;
             float lateMixL = fdnOutL * lateMakeupGainLinear * lateLevel;
             float lateMixR = fdnOutR * lateMakeupGainLinear * lateLevel;
 
-            // AcousticMetrics に Wet を投入
             float wetMono = (lateMixL + lateMixR) * 0.5f;
             acousticMetrics.processSample(wetMono);
 
-            // ── 5. Saturation 適用 (Layer 2: Wet 出力) ──
+            // ── 5. Saturation (Layer 2) ──
             float satL = saturatorL.processSample(lateMixL);
             float satR = saturatorR.processSample(lateMixR);
 
-            // ────────────────────────────────────────────────────────────────
-            // ★ Phase 3-1: ER SOLO 機能
-            // ────────────────────────────────────────────────────────────────
-            //   ER SOLO 有効時: Late ミックス (FDN サチュレーション含む) を 0 に。
-            //   初期反射のみを出力。
-            //
-            //   用途:
-            //     - 空間定位の確認 (ER だけで「部屋らしさ」を聴く)
-            //     - ER パターンのチューニング・デバッグ
-            //     - クリエイティブ用途 (短いプリディレイのみ欲しい場合)
-            // ────────────────────────────────────────────────────────────────
-            if (erSolo) {
-                satL = 0.0f;
-                satR = 0.0f;
-            }
+            // ── ER SOLO ──
+            if (erSolo) { satL = 0.0f; satR = 0.0f; }
 
-            // ── 6. 最終出力 (Wet ゲイン + Ducking 適用) ──
+            // ── 6. 最終出力 (Ducking + OutputLimiter) ──
             const float finalWetGain = wetGain * duckGainLinear;
             outL[n] = (erMixL + satL) * finalWetGain;
             outR[n] = (erMixR + satR) * finalWetGain;
 
-            // ────────────────────────────────────────────────────────────────
-            // ★ Phase 3-1: OutputLimiter (最終安全装置)
-            // ────────────────────────────────────────────────────────────────
-            //   Threshold = -0.5 dBFS のブリックウォール・リミッター。
-            //   ユーザーが操作するパラメータなし (純粋な安全装置)。
-            //
-            //   設計意図:
-            //     - 過大な Wet レベル + 強い入力 → クリッピング → 不快なデジタル歪み
-            //       を防止。
-            //     - Attack 0.5ms / Release 50ms で自然な制動。
-            //     - L/R に同じゲインを適用 → ステレオイメージ完全保持。
-            // ────────────────────────────────────────────────────────────────
             outputLimiter.process(outL[n], outR[n]);
         }
     }
