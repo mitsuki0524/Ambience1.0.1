@@ -121,7 +121,7 @@ namespace FDNReverb {
         // ─────────────────────────────────────────────────────────────────────────
         inline static float processMicroSaturation(float x) noexcept {
             constexpr float kInScale = 0.08f;   // 入力スケールダウン係数
-            constexpr float kOutScale = 4.0f;    // 出力スケールアップ係数 (= 1/kInScale)
+            constexpr float kOutScale = 1.0f / kInScale;  // kInScale から自動導出 (整合性を保証)
 
             const float xs = x * kInScale;      // スケール後の入力
 
