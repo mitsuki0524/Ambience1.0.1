@@ -1,6 +1,6 @@
 # Ambience
 
-![Release](https://img.shields.io/badge/release-v1.0-blue)
+![Release](https://img.shields.io/badge/release-v1.0.1-blue)
 ![License](https://img.shields.io/badge/license-GPLv3-green)
 ![JUCE](https://img.shields.io/badge/JUCE-8.0.x-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
@@ -191,8 +191,13 @@ Presets use JUCE's standard state serialization. Future versions of Ambience wil
    ```
 4. Rescan your plugins in Ableton Live (or your DAW of choice).
 
+## 📚 User Guide
 
-## Building from Source
+A comprehensive manual covering detailed technical specifications and operational guidelines is included with this repository.
+
+[ ![Manual PDF (JP)](https://img.shields.io/badge/Manual-PDF_(JP)-red?style=for-the-badge&logo=adobe-acrobat-reader) ](Source/Assets/Ambience_UserManual_JP.pdf)
+
+[ ![Manual PDF (EN)](https://img.shields.io/badge/Manual-PDF_(EN)-red?style=for-the-badge&logo=adobe-acrobat-reader) ](Source/Assets/Ambience_UserManual_EN.pdf)
 
 ### Requirements
 
