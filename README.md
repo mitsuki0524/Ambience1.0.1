@@ -13,9 +13,24 @@
 
 ### v1.1.0
 
-- **PreDelay修正**: PreDelayパラメータがDSPに反映されていなかった問題を修正。ER・FDN両方に正しく適用されるように改善。
-- **金属的コムフィルタ音の改善**: DecayTime増大時に発生していた金属的な響きを、DCブロッカー追加・Decay依存マイクロサチュレーション・モジュレーション深度スケーリング・ネステッドAllpass動的変調の4点で対策。
-- **プリセット選択時のPROモード問題修正**: プリセットロード後にPROモードが復元されてしまう問題を修正し、常にNormalモードに戻るように変更。
+**Bug Fixes:**
+- **PreDelay fix**: Fixed PreDelay parameter not being applied to DSP. Now correctly feeds both ER and FDN paths.
+- **Metallic comb-filter artifact fix**: Addressed metallic ringing at long DecayTime values with four countermeasures: DC blocker in FDN loop, decay-dependent micro-saturation blend, modulation depth scaling, and dynamic nested allpass modulation.
+- **Preset PRO Mode fix**: Fixed PRO Mode state being incorrectly restored on preset load. Now always resets to Normal mode.
+
+**Sound Quality Improvements:**
+- **Chorus-style pitch modulation**: Added sine-wave LFO (ChorusLFO) per FDN channel with golden-ratio phase/rate distribution, layered on top of the existing noise LFO for richer, more organic tail texture.
+- **3-stage serial allpass chain**: Expanded nested allpass from 1 stage to 3 serial stages per FDN channel with varied delay times and modulation depths, greatly increasing late-field echo density.
+- **ER→Late reverb transition smoothing**: Early reflection output is now fed into the FDN input at 15% blend, simulating the natural transition from early reflections to late reverberation.
+- **Frequency-dependent modulation**: Modulation depth now scales per FDN channel (1.5× for short-delay/HF channels, 0.5× for long-delay/LF channels), matching the physical behavior of air turbulence.
+- **Soft-knee RMS compression in FDN loop**: Added per-channel RMS envelope follower with soft-knee compression (threshold 0.35), providing transparent level control without harmonic distortion.
+- **Thiran allpass fractional delay interpolation**: Replaced linear interpolation with 1st-order Thiran allpass for FDN main delay lines, achieving flat magnitude response (|H(ω)|=1) and preserving high-frequency clarity in the feedback loop.
+
+**CPU Optimizations:**
+- Replaced `std::sin()` in chorus LFO with parabolic sine approximation (5-10× faster, <0.1% error).
+- Moved `std::sqrt()` in soft-knee compression inside threshold branch (only computed when compression is active).
+- Precomputed all loop-invariant values: frequency-dependent modulation scales, input diffuser delays, allpass base delays (16ch × 3 stages), ER tap gains, and allpass gain stage.
+- Cached sample rate as float to eliminate repeated double→float casts in the hot path.
 
 ## Overview
 
