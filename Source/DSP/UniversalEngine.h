@@ -125,6 +125,15 @@ namespace FDNReverb {
         // ★ Phase 5 追加: アルゴリズム別 Diffusion 感度
         float diffusionSensitivity{ 1.0f };
 
+        // ★ 金属音対策: DecayTime 依存のパラメータ
+        float microSatBlend{ 1.0f };   // FDNループ内マイクロサチュレーションの適用量 (0=バイパス, 1=フル)
+        float modDepthScale{ 1.0f };   // モジュレーション深さのスケーリング (長いDecayで増加)
+
+        // ★ DCブロッカー: FDNループ内のDC蓄積を防止
+        std::array<float, FDN_ORDER> dcX1;
+        std::array<float, FDN_ORDER> dcY1;
+        float dcBlockerCoeff{ 0.999f };
+
         std::array<float, NUM_BANDS> effectiveRT60;
         float theoreticalEDT{ 0.0f };
 

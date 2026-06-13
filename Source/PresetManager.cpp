@@ -79,6 +79,11 @@ bool PresetManager::loadPreset(const juce::String& name)
     if (!file.loadFileAsData(data)) return false;
 
     processor.setStateInformation(data.getData(), static_cast<int>(data.getSize()));
+
+    // ★ プリセットロード後は常に通常画面（Normal Mode）に戻す
+    if (auto* param = processor.apvts.getParameter("promode"))
+        param->setValueNotifyingHost(0.0f);
+
     currentPresetName = name;
     if (onPresetLoaded) onPresetLoaded(name);
     return true;

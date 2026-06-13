@@ -98,6 +98,11 @@ namespace FDNReverb {
         duckingReleaseCoeff = 1.0f - std::exp(-1.0f / (static_cast<float>(fs) * 0.200f));
         duckingEnvelope = 0.0f;
 
+        // ★ DCブロッカー係数: fc ≈ 5Hz の1次HPF
+        dcBlockerCoeff = 1.0f - (6.28318530718f * 5.0f / static_cast<float>(fs));
+        dcX1.fill(0.0f);
+        dcY1.fill(0.0f);
+
         reset();
     }
 
@@ -118,6 +123,8 @@ namespace FDNReverb {
         outputLimiter.reset();
         outputEQ.reset();
         duckingEnvelope = 0.0f;
+        dcX1.fill(0.0f);
+        dcY1.fill(0.0f);
         for (auto& lfo : lfos) lfo.smoothed = 0.0f;
     }
 
@@ -253,6 +260,30 @@ namespace FDNReverb {
             rt60Mid += effectiveRT60[b];
         rt60Mid = std::max(0.1f, rt60Mid / 6.0f);
 
+        // ─────────────────────────────────────────────────────────────────────────
+        //  ★ 金属音対策 (1): Decay依存マイクロサチュレーション
+        // ─────────────────────────────────────────────────────────────────────────
+        //  FDN ループ内の processMicroSaturation() は、短い残響では温かみを加えるが、
+        //  長い残響では非線形歪みが多数回蓄積し、コムフィルタ構造の共鳴周波数を
+        //  強調して金属的なキーン音を引き起こす。
+        //
+        //  対策: RT60 中域平均が 2.0s 以下なら従来通り適用、2.0s〜6.0s で漸減、
+        //        6.0s 以上で完全バイパス。
+        // ─────────────────────────────────────────────────────────────────────────
+        microSatBlend = juce::jlimit(0.0f, 1.0f, 1.0f - (rt60Mid - 2.0f) / 4.0f);
+
+        // ─────────────────────────────────────────────────────────────────────────
+        //  ★ 金属音対策 (2): Decay依存モジュレーション深さスケーリング
+        // ─────────────────────────────────────────────────────────────────────────
+        //  長い残響ほど、コムフィルタのピークをぼかすために深いモジュレーションが必要。
+        //  Lexicon / Strymon 等の高品位リバーブの標準手法。
+        //
+        //  RT60 ≤ 1.0s → 1.0x (変化なし)
+        //  RT60 = 3.0s → 2.6x
+        //  RT60 ≥ 6.0s → 5.0x (上限)
+        // ─────────────────────────────────────────────────────────────────────────
+        modDepthScale = 1.0f + juce::jlimit(0.0f, 4.0f, (rt60Mid - 1.0f) * 0.8f);
+
         constexpr float baseDB = 16.0f;
         float decayCompDB = 7.0f * std::log10(rt60Mid);
 
@@ -352,7 +383,8 @@ namespace FDNReverb {
         float* outL, float* outR,
         int numSamples) noexcept
     {
-        const float depthSamples = activeParams.modAmount * 0.002f * static_cast<float>(fs);
+        // ★ 金属音対策: モジュレーション深さをDecay依存でスケーリング
+        const float depthSamples = activeParams.modAmount * 0.002f * static_cast<float>(fs) * modDepthScale;
         const float wetGain = juce::Decibels::decibelsToGain(activeParams.wetDB);
         const float stereoWidth = activeParams.stereoWidth;
         const float erLevel = activeParams.erLevel;
@@ -448,9 +480,31 @@ namespace FDNReverb {
                 d = absorptionFilters[i].tick(d, currentAbsorptionCoeffs[i]);
 #endif
 
-                d = processMicroSaturation(d);
+                // ★ 金属音対策 (3): DCブロッカー (1次HPF, fc≈5Hz)
+                //   FDNループ内で吸収フィルタやマイクロサチュレーションが生成する
+                //   DC成分の蓄積を防止。蓄積DCは低域のうなりや非対称歪みの原因になる。
+                {
+                    const float dcIn = d;
+                    const float dcOut = dcIn - dcX1[i] + dcBlockerCoeff * dcY1[i];
+                    dcX1[i] = dcIn;
+                    dcY1[i] = dcOut;
+                    d = dcOut;
+                }
 
-                const float apfDelaySmp = (1.5f + i * 0.3f) * 0.001f * static_cast<float>(fs);
+                // ★ 金属音対策 (1): Decay依存マイクロサチュレーション
+                //   microSatBlend=1.0 → 従来通り適用 (短残響)
+                //   microSatBlend=0.0 → 完全バイパス (長残響)
+                if (microSatBlend > 0.001f) {
+                    const float sat = processMicroSaturation(d);
+                    d = d + (sat - d) * microSatBlend;
+                }
+
+                // ★ 金属音対策 (4): ネストAllpassにもモジュレーションを適用
+                //   固定遅延のallpassは特定周波数を強調してトーナルカラーリングの原因になる。
+                //   メインLFOの15%の深さで緩やかに変調し、固定パターンを破壊する。
+                const float apfModDepth = depthSamples * 0.15f;
+                const float apfDelaySmp = (1.5f + i * 0.3f) * 0.001f * static_cast<float>(fs)
+                    + lfoVal * apfModDepth;
                 float apfD = nestedAllpassDelays[i].read(apfDelaySmp);
                 float apfW = d + effectiveApfGain * apfD;
                 nestedAllpassDelays[i].write(apfW);
