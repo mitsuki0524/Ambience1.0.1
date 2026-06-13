@@ -62,7 +62,8 @@ namespace FDNReverb {
             };
 
         size_t totalMemoryNeeded =
-            getPow2(static_cast<size_t>(fs * 1.0))
+            getPow2(static_cast<size_t>(fs * 0.5))              // ★ preDelay (max 500ms)
+            + getPow2(static_cast<size_t>(fs * 1.0))
             + getPow2(static_cast<size_t>(fs * 0.05)) * 4
             + getPow2(static_cast<size_t>(fs * 0.5)) * FDN_ORDER
             + getPow2(static_cast<size_t>(fs * 0.1)) * FDN_ORDER;
@@ -71,6 +72,10 @@ namespace FDNReverb {
 
         int mask = 0;
         float* ptr = nullptr;
+
+        // ★ PreDelay (max 500ms)
+        ptr = memoryPool.requestMemory(static_cast<size_t>(fs * 0.5), mask);
+        preDelayLine.init(ptr, mask);
 
         ptr = memoryPool.requestMemory(static_cast<size_t>(fs * 1.0), mask);
         erDelay.init(ptr, mask);
@@ -143,6 +148,9 @@ namespace FDNReverb {
         const float relMs = juce::jmax(0.1f, p.duckingRelMs);
         duckingAttackCoeff = 1.0f - std::exp(-1.0f / (static_cast<float>(fs) * attMs * 0.001f));
         duckingReleaseCoeff = 1.0f - std::exp(-1.0f / (static_cast<float>(fs) * relMs * 0.001f));
+
+        // ★ PreDelay: ms → サンプル数に変換
+        preDelaySamples = p.preDelayMs * 0.001f * static_cast<float>(fs);
 
         outputEQ.setLoCutHz(p.loCutHz);
         outputEQ.setHiCutHz(p.hiCutHz);
@@ -418,6 +426,15 @@ namespace FDNReverb {
             const float sideIn = (leftIn - rightIn) * 0.5f;
             float erOutL = 0.0f, erOutR = 0.0f;
 
+            // ★ PreDelay: 原音とリバーブの時間的分離
+            //   ER・FDN 両方の入力をプリディレイで遅延させる。
+            //   これにより原音のアタック直後にリバーブが始まらず、
+            //   ミックスの明瞭度 (D50/C50) が大幅に向上する。
+            preDelayLine.write(midIn);
+            const float delayedMid = (preDelaySamples > 0.5f)
+                ? preDelayLine.read(preDelaySamples)
+                : midIn;
+
             const float inputPeak = juce::jmax(std::abs(leftIn), std::abs(rightIn));
             const float envCoeff = (inputPeak > duckingEnvelope)
                 ? duckingAttackCoeff : duckingReleaseCoeff;
@@ -431,7 +448,7 @@ namespace FDNReverb {
                 duckGainLinear = juce::Decibels::decibelsToGain(gainRedDB);
             }
 
-            float fdnInputMid = midIn;
+            float fdnInputMid = delayedMid;
             if (!bypassInputDiffusers) {
                 for (int i = 0; i < 4; ++i) {
                     float delaySmp = (3.0f + i * 2.0f) * 0.001f * static_cast<float>(fs);
@@ -443,7 +460,7 @@ namespace FDNReverb {
             }
 
             if (!bypassER) {
-                erDelay.write(midIn);
+                erDelay.write(delayedMid);
                 float erTotalL = 0.0f, erTotalR = 0.0f;
                 for (int t = 0; t < currentERTapCount; ++t) {
                     float tapValue = erDelay.read(currentERDelaySamples[t]);

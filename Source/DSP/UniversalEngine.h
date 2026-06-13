@@ -87,6 +87,10 @@ namespace FDNReverb {
 
         static constexpr int FDN_ORDER = 16;
 
+        // ★ PreDelay ディレイライン (最大500ms)
+        LinearDelayLine                              preDelayLine;
+        float                                        preDelaySamples{ 0.0f };
+
         LinearDelayLine                              erDelay;
         std::array<float, 16>                        erTaps;
         std::array<LinearDelayLine, 4>               inputDiffusers;
