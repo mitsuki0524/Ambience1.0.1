@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<JUCERPROJECT id="XCQgzy" name="Ambience" projectType="audioplug" useAppConfig="0"
+              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" pluginFormats="buildVST3"
+              pluginVST3Category="Reverb">
+  <MAINGROUP id="OQOuP3" name="Ambience">
+    <GROUP id="{23174F1C-FAED-4134-DFD6-F837F49AA839}" name="Source">
+      <GROUP id="{D2CBD0C6-6267-2A7B-C316-0B2A13383600}" name="Assets">
+        <FILE id="npllYj" name="Ambience_UserManual_EN.pdf" compile="0" resource="1"
+              file="Source/Assets/Ambience_UserManual_EN.pdf"/>
+        <FILE id="OJ55A2" name="Ambience_UserManual_JP.pdf" compile="0" resource="1"
+              file="Source/Assets/Ambience_UserManual_JP.pdf"/>
+        <FILE id="WKU1JE" name="Screenshot1.jpg" compile="0" resource="1" file="Source/Assets/Screenshot1.jpg"/>
+        <FILE id="DRXlDK" name="Screenshot2.jpg" compile="0" resource="1" file="Source/Assets/Screenshot2.jpg"/>
+      </GROUP>
+      <GROUP id="{1F2F3D8D-33A9-7597-23B6-4AF557234DF7}" name="DSP">
+        <FILE id="YvA1ml" name="AcousticMetrics.cpp" compile="1" resource="0"
+              file="Source/DSP/AcousticMetrics.cpp"/>
+        <FILE id="AbEFOq" name="AcousticMetrics.h" compile="0" resource="0"
+              file="Source/DSP/AcousticMetrics.h"/>
+        <FILE id="GeS52b" name="BiquadFilters.cpp" compile="1" resource="0"
+              file="Source/DSP/BiquadFilters.cpp"/>
+        <FILE id="iXxk3M" name="BiquadFilters.h" compile="0" resource="0" file="Source/DSP/BiquadFilters.h"/>
+        <FILE id="oX5FHQ" name="DelayMemory.h" compile="0" resource="0" file="Source/DSP/DelayMemory.h"/>
+        <FILE id="A784ZD" name="DSPConstants.h" compile="0" resource="0" file="Source/DSP/DSPConstants.h"/>
+        <FILE id="ni30qC" name="EarlyReflections.cpp" compile="1" resource="0"
+              file="Source/DSP/EarlyReflections.cpp"/>
+        <FILE id="oiTIx2" name="EarlyReflections.h" compile="0" resource="0"
+              file="Source/DSP/EarlyReflections.h"/>
+        <FILE id="JFzd0l" name="MagnitudeResponseFitter.cpp" compile="1" resource="0"
+              file="Source/DSP/MagnitudeResponseFitter.cpp"/>
+        <FILE id="fyse2u" name="MagnitudeResponseFitter.h" compile="0" resource="0"
+              file="Source/DSP/MagnitudeResponseFitter.h"/>
+        <FILE id="QndxCu" name="OutputEQ.h" compile="0" resource="0" file="Source/DSP/OutputEQ.h"/>
+        <FILE id="e783rx" name="OutputLimiter.h" compile="0" resource="0" file="Source/DSP/OutputLimiter.h"/>
+        <FILE id="s2UqYA" name="SAPFStage.cpp" compile="1" resource="0" file="Source/DSP/SAPFStage.cpp"/>
+        <FILE id="DzTnyQ" name="SAPFStage.h" compile="0" resource="0" file="Source/DSP/SAPFStage.h"/>
+        <FILE id="UIyASH" name="Saturator.h" compile="0" resource="0" file="Source/DSP/Saturator.h"/>
+        <FILE id="XUETqV" name="UniversalEngine.cpp" compile="1" resource="0"
+              file="Source/DSP/UniversalEngine.cpp"/>
+        <FILE id="icEkMF" name="UniversalEngine.h" compile="0" resource="0"
+              file="Source/DSP/UniversalEngine.h"/>
+      </GROUP>
+      <GROUP id="{53240ED3-99F2-BF28-613B-423A54CDB084}" name="GUI">
+        <FILE id="TBc953" name="AmbienceUI.cpp" compile="1" resource="0" file="Source/GUI/AmbienceUI.cpp"/>
+        <FILE id="g4LWVE" name="AmbienceUI.h" compile="0" resource="0" file="Source/GUI/AmbienceUI.h"/>
+        <FILE id="mPCcQ5" name="DecayCurveViz.cpp" compile="1" resource="0"
+              file="Source/GUI/DecayCurveViz.cpp"/>
+        <FILE id="hswVYb" name="DecayCurveViz.h" compile="0" resource="0" file="Source/GUI/DecayCurveViz.h"/>
+      </GROUP>
+      <FILE id="IWUrO1" name="AlgorithmPresets.h" compile="0" resource="0"
+            file="Source/AlgorithmPresets.h"/>
+      <FILE id="V36PAN" name="PluginParameters.cpp" compile="1" resource="0"
+            file="Source/PluginParameters.cpp"/>
+      <FILE id="KsCObe" name="PluginParameters.h" compile="0" resource="0"
+            file="Source/PluginParameters.h"/>
+      <FILE id="PYfCmp" name="PresetManager.cpp" compile="1" resource="0"
+            file="Source/PresetManager.cpp"/>
+      <FILE id="z8IFdD" name="PresetManager.h" compile="0" resource="0" file="Source/PresetManager.h"/>
+    </GROUP>
+    <GROUP id="{C9EACF2B-6231-83D4-0DA1-421FE927A4D3}" name="Source">
+      <FILE id="QMgNrX" name="PluginProcessor.cpp" compile="1" resource="0"
+            file="Source/PluginProcessor.cpp"/>
+      <FILE id="q6Cdi6" name="PluginProcessor.h" compile="0" resource="0"
+            file="Source/PluginProcessor.h"/>
+      <FILE id="GCW56v" name="PluginEditor.cpp" compile="1" resource="0"
+            file="Source/PluginEditor.cpp"/>
+      <FILE id="GRnnrQ" name="PluginEditor.h" compile="0" resource="0" file="Source/PluginEditor.h"/>
+    </GROUP>
+  </MAINGROUP>
+  <MODULES>
+    <MODULE id="juce_analytics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_animation" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_devices" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_formats" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_plugin_client" showAllCode="1" useLocalCopy="0"
+            useGlobalPath="1"/>
+    <MODULE id="juce_audio_processors" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_processors_headless" showAllCode="1" useLocalCopy="0"
+            useGlobalPath="1"/>
+    <MODULE id="juce_audio_utils" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_box2d" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_core" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_cryptography" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_data_structures" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_dsp" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_events" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_graphics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_gui_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_gui_extra" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_javascript" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_midi_ci" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_opengl" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_osc" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_product_unlocking" showAllCode="1" useLocalCopy="0"
+            useGlobalPath="1"/>
+    <MODULE id="juce_video" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+  </MODULES>
+  <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1" JUCE_VST3_CAN_REPLACE_VST2="0"/>
+  <EXPORTFORMATS>
+    <XCODE_MAC targetFolder="Builds/MacOSX">
+      <CONFIGURATIONS>
+        <CONFIGURATION isDebug="1" name="Debug" targetName="Ambience"/>
+        <CONFIGURATION isDebug="0" name="Release" targetName="Ambience"/>
+      </CONFIGURATIONS>
+      <MODULEPATHS>
+        <MODULEPATH id="juce_analytics" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_animation" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_basics" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_devices" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_formats" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_plugin_client" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors_headless" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_utils" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_box2d" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_core" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_cryptography" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_data_structures" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_dsp" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_events" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_graphics" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_gui_basics" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_gui_extra" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_javascript" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_midi_ci" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_opengl" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_osc" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_product_unlocking" path="../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="juce_video" path="../../../../../Applications/JUCE/modules"/>
+      </MODULEPATHS>
+    </XCODE_MAC>
+  </EXPORTFORMATS>
+</JUCERPROJECT>
