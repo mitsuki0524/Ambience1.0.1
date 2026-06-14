@@ -5,12 +5,6 @@
 
 namespace FDNReverb {
 
-    struct ERTap {
-        float delaySamples{ 0.f };
-        float gainL{ 0.f };
-        float gainR{ 0.f };
-    };
-
     class EarlyReflections {
     public:
         void prepare(const juce::dsp::ProcessSpec& spec);

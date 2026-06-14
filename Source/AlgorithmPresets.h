@@ -122,6 +122,9 @@ namespace FDNReverb {
     struct ERTap {
         float delayMs;
         float gain;
+        float delaySamples{ 0.f };
+        float gainL{ 0.f };
+        float gainR{ 0.f };
     };
 
     struct ERPattern {
